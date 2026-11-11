@@ -1,5 +1,7 @@
 # Sec-Sci
 
+[![CI](https://github.com/nexuss0781/SciSec/actions/workflows/ci.yml/badge.svg)](https://github.com/nexuss0781/SciSec/actions/workflows/ci.yml)
+
 Sec-Sci is a complete, from-scratch cryptographic system built from
 mathematical definitions rather than third-party crypto libraries. It
 implements twelve components (C1-C12), from a CSPRNG and the underlying

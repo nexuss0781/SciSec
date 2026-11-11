@@ -4,55 +4,55 @@ Generated: 2026-11-11. Repository: https://github.com/nexuss0781/SciSec
 
 ## Current state
 
+### Components and reference implementation
+
 * All 12 components (C1-C12) are implemented in the pure-Python reference
   under `secsci/primitives/` and `secsci/components/`.
-* The full Python suite is green locally: **294 tests**, of which the 16
-  C++ binding cross-validation tests skip when the shared library is not
-  built.
-* The C++17 core exists under `cpp/` and exposes the `secsci_api_v1`
-  vtable from `cpp/include/secsci.h`.
-* All C++ translation units compile cleanly with GCC 12 (`-std=c++17
-  -Wall -Wextra`) through the Compiler Explorer check in
-  `tools/remote_compile.py`.
-* Runtime KATs for SHA-256/512, HMAC, X25519, AES-GCM and ChaCha20-
-  Poly1305 were checked remotely. A real HKDF-Expand bug was found and
-  fixed locally (the expand loop was using a raw hash context instead of
-  HMAC; the fix is not yet pushed).
-* The GitHub repository is public and the initial commit is pushed:
-  `5a1451c Sec-Sci: 12-component crypto system with C++ core and Python binding`.
+* The full local Python suite is green: **294 tests** (278 pass, 16 C++
+  binding tests skip when the shared library has not been built).
+* RFC/NIST known-answer tests cover SHA-2, HMAC, HKDF, BLAKE2b, Argon2,
+  AES, AES-GCM, ChaCha20-Poly1305, X25519, Ed25519, AES-KW, HMAC-DRBG,
+  TLS 1.3 (RFC 8448 transcript), Shamir, and the OPRF/SVR construction.
 
-## Remaining work (in order)
+### C++ core engine
 
-1. **Push the HKDF fix and the GF(2^521−1) selftest correction.**
-   - `cpp/src/sha2.cpp`: HKDF-Expand now calls `hmac_fn` with
-     `previous || info || counter`; needs remote/CI revalidation.
-   - `cpp/selftest.cpp`: `inv(2)` must be checked as `inv(2) * 2 == 1`,
-     not compared to `1` directly. Fixed locally, not yet pushed.
-2. **Re-run the remote C++ KATs** with `python tools/remote_run.py` for
-   `sha_drbg`, `aes_gcm`, `chacha`, `gf521`, `x25519`. The AES-GCM and
-   ChaCha runs previously returned an empty response from the compile
-   service and must be retried.
-3. **Get GitHub Actions green on ubuntu-latest, windows-latest and
-   macos-latest.** The workflow in `.github/workflows/ci.yml` configures
-   CMake, builds `secsci`, runs `ctest`, then runs pytest. The first CI
-   run was triggered by the initial push and will fail until the fixes
-   above are pushed. Inspect with `gh run list` / `gh run watch`.
-4. **Confirm the ctypes binding works against the compiled library on
-   every OS.** The 16 binding tests must stop skipping and cross-validate
-   hashes, HMAC, HKDF, AES-GCM, ChaCha20-Poly1305, X25519, HMAC-DRBG
-   (including reseed), GF(2^521−1), argument validation, and the explicit
-   Ed25519 `UNSUPPORTED` result.
-5. **Fix any MSVC-specific build issues.** The current remote check uses
-   GCC only. Windows CI is the first MSVC build. Likely areas: export
-   macros (`SECSCI_BUILD`/`__declspec(dllexport)`), warning level `/W4`,
-   and the `secsci.dll` output path (`build/Release`, already covered by
-   library discovery).
-6. **Clean up development aids before a release tag.** Decide whether to
-   keep `tools/remote_compile.py`, `tools/remote_run.py`,
-   `tools/gen_vectors.py` and `tools/gen_x_vectors.py`. They are useful
-   for reproducing the vectors but depend on external services or print
-   intermediate values.
-7. **Optional C++ engine expansion.** The following primitives remain
+* The C++17 engine under `cpp/` exposes the `secsci_api_v1` vtable from
+  `cpp/include/secsci.h`; `secsci/binding.py` mirrors the struct with
+  `ctypes` and loads the shared library from `SECSCI_LIBRARY`, the CMake
+  build directory, or the platform default name.
+* All translation units compile cleanly with GCC 12
+  (`-std=c++17 -Wall -Wextra`) through `tools/remote_compile.py`, and
+  MSVC builds the same sources on Windows CI.
+* Remote runtime KATs pass for SHA-256/512, HMAC, HKDF, HMAC-DRBG,
+  GF(2^521-1), X25519, AES-256-GCM, and ChaCha20-Poly1305:
+  `python tools/remote_run.py sha_drbg gf521 x25519 aes_gcm chacha`.
+
+### Continuous integration
+
+* Run `42993691863` (initial commit): all three C++ builds succeeded;
+  CTest failed on a real HKDF-Expand bug (the expand loop hashed
+  `previous || info || counter` directly instead of calling HMAC).
+* The HKDF fix, a GF(2^521-1) selftest correction, and this report were
+  pushed as `a79dd8a`.
+* Run `42994069974` (`a79dd8a`): ubuntu-latest, windows-latest, and
+  macos-latest all built `libsecsci`/`secsci.dll`/`libsecsci.dylib`,
+  passed `secsci_selftest` through CTest, and ran the Python suite with
+  the binding tests active. **293 of 294 tests passed.** The only failure
+  was `tests/test_binding.py::test_gf521_matches_python`, which asked the
+  engine for the inverse of zero; zero has no inverse, Python raises
+  `ZeroDivisionError`, and the C++ ABI correctly returns
+  `SECSCI_ERR_ARGUMENT`. This was a test bug, not an engine bug.
+* The test now asserts rejection of zero and was pushed as `2a7c5e9`.
+  Run `42994648938` is **green on ubuntu-latest, windows-latest, and
+  macos-latest**: all three built the shared library, passed
+  `secsci_selftest`, and ran **294/294 Python tests with no skips**, so
+  the 16 ctypes binding cross-validation tests executed against the
+  compiled engine on every platform.
+* A CI badge has been added to the top of `README.md`.
+
+## Remaining work
+
+1. **Optional C++ engine expansion.** The following primitives remain
    Python-only and are not in the C ABI:
    - Ed25519 (the ABI slots return `SECSCI_ERR_UNSUPPORTED`);
    - Argon2d/i/id (C8 uses the Python implementation);
@@ -61,14 +61,21 @@ Generated: 2026-11-11. Repository: https://github.com/nexuss0781/SciSec
    - the C3-C12 protocol layer itself.
    Adding these requires an ABI v2 (or new slots with a version bump) and
    corresponding binding tests.
-8. **Final documentation pass.** Re-read `README.md` against the actual
-   CI behaviour (especially the Argon2 parameter note), record the final
-   test count, and add the CI badge URL once the workflow is green.
-9. **Security review / hardening.** The project is explicitly a
-   reference implementation: Python big integers and the C++ code are
-   not constant-time, the C9 transport is not wire-compatible TLS, C12
-   shares are unauthenticated, and the OPRF group has composite order.
-   These are documented but not remediated.
+2. **Decide on development aids before a release tag.**
+   `tools/remote_compile.py`, `tools/remote_run.py`,
+   `tools/gen_vectors.py`, and `tools/gen_x_vectors.py` are useful for
+   reproducing the checks but depend on external services or print
+   intermediate values. Keep them under `tools/` and document that they
+   are development-only, or remove them.
+3. **Security review / hardening.** The project is explicitly a
+   reference implementation:
+   - Python big integers and the C++ code are not constant-time;
+   - the C9 transport is not wire-compatible TLS;
+   - C12 shares are unauthenticated;
+   - the OPRF group has composite order (p-1 = 2(2^520-1), not prime);
+   - Argon2 production parameters are documented but not enforced by the
+     test suite (tests use the smaller RFC 9106 vector parameters).
+   These are documented in `README.md` but not remediated.
 
 ## Commands
 
@@ -76,7 +83,7 @@ Generated: 2026-11-11. Repository: https://github.com/nexuss0781/SciSec
 python -m pytest -q
 python -m pytest -m binding -q
 python tools/remote_compile.py
-python tools/remote_run.py
+python tools/remote_run.py sha_drbg gf521 x25519 aes_gcm chacha
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
