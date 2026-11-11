@@ -1,6 +1,7 @@
 #include "internal.h"
 
 #include <cstring>
+#include <vector>
 
 namespace secsci {
 namespace {
@@ -426,15 +427,18 @@ bool hkdf_impl(const uint8_t *salt, size_t salt_len,
     size_t previous_len = 0;
     size_t offset = 0;
     uint8_t counter = 1;
+    std::vector<uint8_t> message;
+    message.reserve(HashLen + info_len + 1);
     while (offset < out_len) {
-        Ctx ctx;
-        ctx.update(previous, previous_len);
-        if (info_len) {
-            ctx.update(info, info_len);
+        message.clear();
+        if (previous_len) {
+            message.insert(message.end(), previous, previous + previous_len);
         }
-        uint8_t ctr = counter;
-        ctx.update(&ctr, 1);
-        ctx.final(previous);
+        if (info_len) {
+            message.insert(message.end(), info, info + info_len);
+        }
+        message.push_back(counter);
+        hmac_fn(prk, HashLen, message.data(), message.size(), previous);
         previous_len = HashLen;
         size_t take = out_len - offset;
         if (take > HashLen) {
@@ -444,7 +448,6 @@ bool hkdf_impl(const uint8_t *salt, size_t salt_len,
         offset += take;
         ++counter;
     }
-    (void)hmac_fn;
     return true;
 }
 
