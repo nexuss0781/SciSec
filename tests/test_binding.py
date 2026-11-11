@@ -276,7 +276,14 @@ def test_gf521_matches_python(core):
     values += [RNG.randrange(GF_P) for _ in range(20)]
     for a in values:
         encoded_a = encode_field(a)
-        assert core.gf521_inv(encoded_a) == encode_field(gf_inv(a))
+        if a == 0:
+            # Zero has no inverse; both implementations must reject it.
+            with pytest.raises(ZeroDivisionError):
+                gf_inv(a)
+            with pytest.raises(ValueError):
+                core.gf521_inv(encoded_a)
+        else:
+            assert core.gf521_inv(encoded_a) == encode_field(gf_inv(a))
         for b in values[:10]:
             encoded_b = encode_field(b)
             assert core.gf521_add(encoded_a, encoded_b) == encode_field(
