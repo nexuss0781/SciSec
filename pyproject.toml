@@ -1,0 +1,18 @@
+[project]
+name = "secsci"
+version = "1.0.0"
+description = "Sec-Sci: a from-scratch, mathematics-driven cryptographic system with a C++ core engine and Python bindings"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: long-running tests (Argon2 with RFC parameters, million-byte hashing)",
+    "binding: cross-validation against the compiled C++ core engine",
+]
+addopts = "-q"
